@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum NodeType {
+  ADD_NODE
+  INITIAL
+  EMPTY
+  SEND_EMAIL
+  WEBHOOK_TRIGGER
+  MANUAL_TRIGGER
+}
+
+enum EdgeType {
+  STEP
+}
+
+model User {
+  id          String       @id @default(uuid())
+  username    String       @unique
+  name        String?
+  password    String
+  workflows   Workflow[]
+  credentials Credential[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model CredentialType {
+  id             String       @id @default(uuid())
+  credentialType String
+  Credential     Credential[]
+}
+
+model Credential {
+  id               String         @id @default(uuid())
+  User             User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String?
+  credentialType   CredentialType @relation(fields: [credentialTypeId], references: [id], onDelete: Restrict)
+  credentialTypeId String
+  metadata         String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+model Workflow {
+  id         String      @id @default(uuid())
+  name       String
+  nodes      Node[]
+  edges      Edge[]
+  userId     String?
+  User       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  archivedAt DateTime?
+  execution  Execution[]
+
+  @@index([updatedAt])
+}
+
+model Edge {
+  id           String    @id
+  workflow     Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId   String?
+  sourceNode   Node      @relation("edgeSource", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  sourceNodeId String
+  targetNode   Node      @relation("edgeTarget", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  targetNodeId String
+  edgeType     EdgeType
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([workflowId, id])
+  @@index([workflowId])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+}
+
+model Node {
+  id            String    @id
+  workflow      Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId    String?
+  nodeType      NodeType
+  positionX     Int
+  positionY     Int
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  outgoingEdges Edge[]    @relation("edgeSource")
+  incomingEdges Edge[]    @relation("edgeTarget")
+
+  @@unique([workflowId, id])
+  @@index([workflowId])
+}
+
+enum ExecutionStatus {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+model Execution {
+  id         String          @id @default(uuid())
+  status     ExecutionStatus
+  output     Json?
+  workflow   Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId String
+  startedAt  DateTime?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([status])
+  @@index([workflowId])
+}
